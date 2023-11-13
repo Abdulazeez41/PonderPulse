@@ -62,4 +62,4 @@ To use PonderPulse, follow these steps:
 
 ## Deployed Canister link
 
-- [Ponder Pulse](http://127.0.0.1:4943/?canisterId=bd3sg-teaaa-aaaaa-qaaba-cai&id=avqkn-guaaa-aaaaa-qaaea-cai)
+- [Ponder Pulse](http://127.0.0.1:4943/?canisterId=br5f7-7uaaa-aaaaa-qaaca-cai&id=be2us-64aaa-aaaaa-qaabq-cai)
