@@ -29,7 +29,6 @@ service : () -> {
   getPost : (text) -> (_AzleResult_1) query;
   getPostComments : (text) -> (_AzleResult_3) query;
   getPosts : () -> (_AzleResult_2) query;
-  isCallerValid : () -> (bool);
   likePost : (text) -> (_AzleResult_4);
   unlikePost : (text) -> (_AzleResult_4);
   updatePost : (text, PostPayload) -> (_AzleResult_1);
