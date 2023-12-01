@@ -46,188 +46,334 @@ type CommentRecord = Record<{
 // Create a stable BTreeMap to store posts
 const postStorage = new StableBTreeMap<string, PostRecord>(0, 44, 1024);
 
-// Query function to get all posts
+/**
+* Query function to get all posts
+*/
 $query;
 export function getPosts(): Result<Vec<PostRecord>, string> {
-  return Result.Ok(postStorage.values());
+  try {
+    return Result.Ok(postStorage.values());
+  } catch (error) {
+    return Result.Err(`Error getting posts: ${error}`);
+  }
 }
 
-// Query function to get a specific post by ID
+/**
+* Query function to get a specific post by ID
+*/
 $query;
 export function getPost(postId: string): Result<PostRecord, string> {
-  return match(postStorage.get(postId), {
-    Some: (post) => Result.Ok<PostRecord, string>(post),
-    None: () =>
-      Result.Err<PostRecord, string>(`Post with id=${postId} not found`),
-  });
+  try {
+    // Validate ID format
+    if (!isValidUUID(postId)) {
+      return Result.Err(`Invalid ID format for Post: ${postId}`);
+    }
+
+    return match(postStorage.get(postId), {
+      Some: (post) => Result.Ok<PostRecord, string>(post),
+      None: () =>
+        Result.Err<PostRecord, string>(`Post with id=${postId} not found`),
+    });
+  } catch (error) {
+    return Result.Err(`Error getting post by id: ${error}`);
+  }
 }
 
-// Query function to get comments of a specific post
+/**
+* Query function to get comments of a specific post
+*/
 $query;
-export function getPostComments(
-  postId: string
-): Result<Vec<CommentRecord>, string> {
-  return match(postStorage.get(postId), {
-    Some: (post) => Result.Ok<Vec<CommentRecord>, string>(post.comments),
-    None: () => Result.Ok<Vec<CommentRecord>, string>([]),
-  });
+export function getPostComments(postId: string): Result<Vec<CommentRecord>, string> {
+  try {
+    // Validate ID format
+    if (!isValidUUID(postId)) {
+      return Result.Err(`Invalid ID format for Post: ${postId}`);
+    }
+
+    return match(postStorage.get(postId), {
+      Some: (post) => Result.Ok<Vec<CommentRecord>, string>(post.comments),
+      None: () => Result.Ok<Vec<CommentRecord>, string>([]),
+    });
+  } catch (error) {
+    return Result.Err(`Error getting post comments: ${error}`);
+  }
 }
 
-// Query function to get posts liked by the caller
-$query;
+/**
+* Query function to get posts liked by the caller
+*/
+$query
 export function getLikedPosts(): Result<Vec<PostRecord>, string> {
-  const caller = ic.caller();
-  const likedPosts = postStorage
-    .values()
-    .filter((post) => !post.liked.includes(caller));
-  return Result.Ok<Vec<PostRecord>, string>(
-    likedPosts.length > 0 ? likedPosts : "You haven't liked any posts yet."
-  );
+  try {
+    // Get the caller's ID
+    const caller = ic.caller();
+
+
+    // Filter posts not liked by the caller
+    const likedPosts = postStorage.values().filter((post) => !post.liked.includes(caller));
+
+    return Result.Ok(likedPosts.length > 0 ? likedPosts : []);
+  } catch (error) {
+    return Result.Err(`Error getting liked posts: ${error}`);
+  }
 }
 
-// Update function to create a new post
+
+/**
+* Update function to create a new post
+*/
 $update;
 export function createPost(payload: PostPayload): Result<PostRecord, string> {
-  const post: PostRecord = {
-    id: uuidv4(),
-    createdAt: ic.time(),
-    updatedAt: Opt.None,
-    author: ic.caller(),
-    comments: [],
-    likes: 0n,
-    liked: [],
-    ...payload,
-  };
-  postStorage.insert(post.id, post);
-  return Result.Ok(post);
+  try {
+    // Validate payload format
+    if (!payload.content || !payload.image || !payload.title) {
+      return Result.Err(`Invalid payload format for creating Post.`);
+    }
+
+    // Get the caller's ID
+    const caller = ic.caller();
+
+
+    const post: PostRecord = {
+      id: uuidv4(),
+      createdAt: ic.time(),
+      updatedAt: Opt.None,
+      author: caller,
+      comments: [],
+      likes: 0n,
+      liked: [],
+      title: payload.title,
+      content: payload.content,
+      image: payload.image,
+    };
+
+    // Insert the new Post into storage
+    postStorage.insert(post.id, post);
+    return Result.Ok(post);
+  } catch (error) {
+    return Result.Err(`Error creating post: ${error}`);
+  }
 }
 
-// Update function to update an existing post
+/**
+* Update function to update an existing post
+*/
 $update;
-export function updatePost(
-  postId: string,
-  payload: PostPayload
-): Result<PostRecord, string> {
-  return match(postStorage.get(postId), {
-    Some: (post) => {
-      if (post.author.toString() !== ic.caller().toString()) {
-        return Result.Err<PostRecord, string>(
-          `Only the author can update the post.`
-        );
-      }
-      const updatedPost: PostRecord = {
-        ...post,
-        ...payload,
-        updatedAt: Opt.Some(ic.time()),
-      };
-      postStorage.insert(post.id, updatedPost);
-      return Result.Ok<PostRecord, string>(updatedPost);
-    },
-    None: () =>
-      Result.Err<PostRecord, string>(
-        `Post with id=${postId} not found. Unable to update.`
-      ),
-  });
+export function updatePost(postId: string, payload: PostPayload): Result<PostRecord, string> {
+  try {
+    // Validate ID format
+    if (!isValidUUID(postId)) {
+      return Result.Err(`Invalid ID format for Post: ${postId}`);
+    }
+
+    // Validate payload format
+    if (!payload.content || !payload.image || !payload.title) {
+      return Result.Err(`Invalid payload format for creating Post.`);
+    }
+
+    return match(postStorage.get(postId), {
+      Some: (post) => {
+        if (post.author.toString() !== ic.caller().toString()) {
+          return Result.Err<PostRecord, string>(
+            `Only the author can update the post.`
+          );
+        }
+        const updatedPost: PostRecord = {
+          ...post,
+          ...payload,
+          updatedAt: Opt.Some(ic.time()),
+        };
+        postStorage.insert(post.id, updatedPost);
+        return Result.Ok<PostRecord, string>(updatedPost);
+      },
+      None: () =>
+        Result.Err<PostRecord, string>(
+          `Post with id=${postId} not found. Unable to update.`
+        ),
+    });
+
+  } catch (error) {
+    return Result.Err(`Error updating post: ${error}`);
+  }
 }
 
-// Update function to delete an existing post
+/**
+* Update function to delete an existing post
+*/
 $update;
 export function deletePost(postId: string): Result<PostRecord, string> {
-  return match(postStorage.get(postId), {
-    Some: (post) => {
-      if (post.author.toString() !== ic.caller().toString()) {
-        return Result.Err<PostRecord, string>(
-          `Only the author can delete the post.`
-        );
-      }
-      postStorage.remove(postId);
-      return Result.Ok<PostRecord, string>(post);
-    },
-    None: () =>
-      Result.Err<PostRecord, string>(
-        `Post with id=${postId} not found. Unable to delete.`
-      ),
-  });
+  try {
+    // Validate ID format
+    if (!isValidUUID(postId)) {
+      return Result.Err(`Invalid ID format for Post: ${postId}`);
+    }
+
+    return match(postStorage.get(postId), {
+      Some: (post) => {
+        if (post.author.toString() !== ic.caller().toString()) {
+          return Result.Err<PostRecord, string>(
+            `Only the author can delete the post.`
+          );
+        }
+        postStorage.remove(postId);
+        return Result.Ok<PostRecord, string>(post);
+      },
+      None: () =>
+        Result.Err<PostRecord, string>(
+          `Post with id=${postId} not found. Unable to delete.`
+        ),
+    });
+  } catch (error) {
+    return Result.Err(`Error deleting post: ${error}`);
+  }
 }
 
-// Update function to add a comment to a post
+/**
+* Update function to add a comment to a post
+*/
 $update;
-export function addComment(
-  postId: string,
-  content: string
-): Result<CommentRecord, string> {
-  return match(postStorage.get(postId), {
-    Some: (post) => {
-      if (post.author.toString() !== ic.caller().toString()) {
-        return Result.Err<CommentRecord, string>(
-          `Only the author can add a comment to the post.`
-        );
-      }
-      const comment: CommentRecord = {
-        content,
-        author: ic.caller(),
-        createdAt: ic.time(),
-      };
-      post.comments.push(comment);
-      postStorage.insert(post.id, post);
-      return Result.Ok<CommentRecord, string>(comment);
-    },
-    None: () =>
-      Result.Err<CommentRecord, string>(
-        `Post with id=${postId} not found. Unable to add comment.`
-      ),
-  });
+export function addComment(postId: string, content: string): Result<CommentRecord, string> {
+  try {
+    // Validate ID format
+    if (!isValidUUID(postId)) {
+      return Result.Err(`Invalid ID format for Post: ${postId}`);
+    }
+
+    return match(postStorage.get(postId), {
+      Some: (post) => {
+        if (post.author.toString() !== ic.caller().toString()) {
+          return Result.Err<CommentRecord, string>(
+            `Only the author can add a comment to the post.`
+          );
+        }
+        const comment: CommentRecord = {
+          content,
+          author: ic.caller(),
+          createdAt: ic.time(),
+        };
+        post.comments.push(comment);
+        postStorage.insert(post.id, post);
+        return Result.Ok<CommentRecord, string>(comment);
+      },
+      None: () =>
+        Result.Err<CommentRecord, string>(
+          `Post with id=${postId} not found. Unable to add comment.`
+        ),
+    });
+  } catch (error) {
+    return Result.Err(`Error adding comment: ${error}`);
+  }
 }
 
-// Update function to like a post
+/**
+* Update function to like a post
+*/
 $update;
 export function likePost(postId: string): Result<nat, string> {
-  return match(postStorage.get(postId), {
-    Some: (post) => {
-      const hasLiked = post.liked.findIndex(
-        (caller) => caller.toString() === ic.caller().toString()
-      );
-      if (hasLiked !== -1) {
-        return Result.Err<nat, string>(`You've already liked this post.`);
-      }
-      post.likes = post.likes + 1n;
-      post.liked.push(ic.caller());
-      postStorage.insert(post.id, post);
-      return Result.Ok<nat, string>(post.likes);
-    },
-    None: () =>
-      Result.Err<nat, string>(
-        `Post with id=${postId} not found. Unable to like.`
-      ),
-  });
+  try {
+    // Validate ID format
+    if (!isValidUUID(postId)) {
+      return Result.Err(`Invalid ID format for Post: ${postId}`);
+    }
+
+    return match(postStorage.get(postId), {
+      Some: (post) => {
+        const hasLiked = post.liked.findIndex(
+          (caller) => caller.toString() === ic.caller().toString()
+        );
+        if (hasLiked !== -1) {
+          return Result.Err<nat, string>(`You've already liked this post.`);
+        }
+        post.likes = post.likes + 1n;
+        post.liked.push(ic.caller());
+        postStorage.insert(post.id, post);
+        return Result.Ok<nat, string>(post.likes);
+      },
+      None: () =>
+        Result.Err<nat, string>(
+          `Post with id=${postId} not found. Unable to like.`
+        ),
+    });
+  } catch (error) {
+    return Result.Err(`Error liking post: ${error}`);
+  }
 }
 
-// Update function to check if the caller is valid
-$update;
-export function isCallerValid(): boolean {
-  const authorizedUsers = []; // Add your list of authorized users here
-  return authorizedUsers.includes(ic.caller().toString());
-}
 
-// Update function to unlike a post
+/**
+* Update function to unlike a post
+*/
 $update;
 export function unlikePost(postId: string): Result<nat, string> {
-  return match(postStorage.get(postId), {
-    Some: (post) => {
-      const hasLiked = post.liked.findIndex(
-        (caller) => caller.toString() === ic.caller().toString()
-      );
-      if (hasLiked === -1) {
-        return Result.Err<nat, string>(`You haven't liked this post.`);
-      }
-      post.likes = post.likes - 1n;
-      post.liked.splice(hasLiked, 1);
-      postStorage.insert(post.id, post);
-      return Result.Ok<nat, string>(post.likes);
-    },
-    None: () =>
-      Result.Err<nat, string>(
-        `Post with id=${postId} not found. Unable to unlike.`
-      ),
-  });
+  try {
+    // Validate ID format
+    if (!isValidUUID(postId)) {
+      return Result.Err(`Invalid ID format for Post: ${postId}`);
+    }
+
+    return match(postStorage.get(postId), {
+      Some: (post) => {
+        const hasLiked = post.liked.findIndex(
+          (caller) => caller.toString() === ic.caller().toString()
+        );
+        if (hasLiked === -1) {
+          return Result.Err<nat, string>(`You haven't liked this post.`);
+        }
+        post.likes = post.likes - 1n;
+        post.liked.splice(hasLiked, 1);
+        postStorage.insert(post.id, post);
+        return Result.Ok<nat, string>(post.likes);
+      },
+      None: () =>
+        Result.Err<nat, string>(
+          `Post with id=${postId} not found. Unable to unlike.`
+        ),
+    });
+  } catch (error) {
+    return Result.Err(`Error unliking post: ${error}`);
+  }
 }
+
+/**
+* Validate if the given string is a valid UUID
+*/
+function isValidUUID(uuid: string): boolean {
+  const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+  return uuidRegex.test(uuid);
+}
+
+
+/**
+* Validate if the given Principal is in a valid format
+*/
+function isValidPrincipal(principal: Principal): boolean {
+  const principalRegex = /^([0-9a-fA-F]{2}){32}$/;
+  return principalRegex.test(principal.toString());
+}
+
+
+globalThis.crypto = {
+  //@ts-ignore
+  getRandomValues: () => {
+    let array = new Uint8Array(32);
+
+    for (let i = 0; i < array.length; i++) {
+      array[i] = Math.floor(Math.random() * 256);
+    }
+
+    return array;
+  },
+};
+
+/**
+//  * Update function to check if the caller is valid
+//  */
+// $update;
+// export function isCallerValid(): boolean {
+//     try {
+//         const authorizedUsers = []; // Add your list of authorized users here
+//         return authorizedUsers.includes(ic.caller().toString());
+//     } catch (error) {
+//         return false;
+//     }
+// }
